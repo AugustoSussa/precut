@@ -13,3 +13,11 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+
+.venv/
+__pycache__/
+
+.env
+*.db
+__pycache__/
+.venv/

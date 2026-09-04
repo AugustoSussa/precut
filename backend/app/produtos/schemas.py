@@ -18,3 +18,4 @@ class ProdutoAtualizar(BaseModel):    # ENTRA na edicao, tudo opcional
     nome: str | None = None
     preco: float | None = None
     em_estoque: bool | None = None
+
