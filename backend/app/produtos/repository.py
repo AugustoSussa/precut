@@ -2,11 +2,28 @@ from sqlalchemy.orm import Session
 
 from .models import Produto
 
+
 # A UNICA parte do sistema que sabe que existe um banco.
+# Se aparecer um `db.query` fora daqui, a camada vazou.
 
 
-def listar(db: Session):
-    return db.query(Produto).all()
+def listar(
+    db: Session,
+    dono_id: int,
+    nome: str | None = None,
+    em_estoque: bool | None = None
+):
+    # O filtro do dono sempre entra.
+    # Os outros filtros só entram quando foram informados.
+    consulta = db.query(Produto).filter(Produto.dono_id == dono_id)
+
+    if nome:
+        consulta = consulta.filter(Produto.nome.ilike(f"%{nome}%"))
+
+    if em_estoque is not None:
+        consulta = consulta.filter(Produto.em_estoque == em_estoque)
+
+    return consulta.order_by(Produto.nome).all()
 
 
 def buscar(db: Session, produto_id: int):
@@ -15,21 +32,34 @@ def buscar(db: Session, produto_id: int):
 
 def criar(db: Session, dados: dict):
     produto = Produto(**dados)
+
     db.add(produto)
     db.commit()
     db.refresh(produto)
+
     return produto
 
 
-def buscar_por_nome(db: Session, nome: str):
-    return db.query(Produto).filter(Produto.nome == nome).first()
+def buscar_por_nome(db: Session, dono_id: int, nome: str):
+    # O nome é único DENTRO do acervo de cada pessoa,
+    # não no mundo inteiro.
+    return (
+        db.query(Produto)
+        .filter(
+            Produto.dono_id == dono_id,
+            Produto.nome == nome
+        )
+        .first()
+    )
 
 
 def atualizar(db: Session, produto: Produto, mudancas: dict):
     for campo, valor in mudancas.items():
         setattr(produto, campo, valor)
+
     db.commit()
     db.refresh(produto)
+
     return produto
 
 

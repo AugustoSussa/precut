@@ -31,3 +31,33 @@ To learn more, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 - [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+
+
+# Biblioteca do Campus — o livro tem dono
+
+O projeto com login e migrações, mais o que o checkpoint pede: o livro
+ganha **dono** (um usuário tem muitos livros), cada pessoa enxerga e mexe só
+no próprio acervo, a listagem tem **busca e filtro**, e o `422` explica o
+que está errado em português. A coluna nova entrou por uma **migração** —
+o `create_all` não existe mais.
+
+> É o mesmo sistema de Programação III, de propósito. Quem cursa as duas vê a
+> mesma biblioteca dos dois lados: lá o foco é *como ele é por dentro*; aqui,
+> *como ele funciona*.
+
+## Rodar
+
+```
+poetry install
+```
+
+Renomeie `env.exemplo` para `.env` (URL do banco e `SECRET_KEY`).
+
+```
+poetry run alembic upgrade head
+poetry run uvicorn app.main:app --reload
+```
+
+O `upgrade head` aplica as **duas** migrações: a que cria `livros` e
+`usuarios`, e a que acrescenta `livros.dono_id`. Depois abra
+<http://127.0.0.1:8000/docs>.

@@ -3,9 +3,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..seguranca import get_current_user
+from ..usuarios.models import Usuario
 from . import service
 from .schemas import ProdutoAtualizar, ProdutoCriar, ProdutoPublico
 
+
+# A porta continua no router: nenhuma rota roda sem token.
+# Cada rota tambem recebe o usuario para saber quem esta fazendo a acao.
 router = APIRouter(
     prefix="/produtos",
     tags=["Produtos"],
@@ -14,34 +18,56 @@ router = APIRouter(
 
 
 @router.get("/", response_model=list[ProdutoPublico])
-def listar(db: Session = Depends(get_db)):
-    return service.listar(db)
+def listar(
+    nome: str | None = None,              # ?nome=notebook
+    em_estoque: bool | None = None,       # ?em_estoque=true
+    usuario: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return service.listar(
+        db,
+        usuario,
+        nome,
+        em_estoque
+    )
 
 
 @router.post("/", response_model=ProdutoPublico, status_code=201)
 def criar(
     dados: ProdutoCriar,
-    db: Session = Depends(get_db)
+    usuario: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return service.criar(db, dados.model_dump())
+    return service.criar(
+        db,
+        usuario,
+        dados.model_dump()
+    )
 
 
 @router.get("/{produto_id}", response_model=ProdutoPublico)
 def buscar(
     produto_id: int,
-    db: Session = Depends(get_db)
+    usuario: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return service.buscar(db, produto_id)
+    return service.buscar(
+        db,
+        usuario,
+        produto_id
+    )
 
 
 @router.patch("/{produto_id}", response_model=ProdutoPublico)
 def atualizar(
     produto_id: int,
     dados: ProdutoAtualizar,
+    usuario: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return service.atualizar(
         db,
+        usuario,
         produto_id,
         dados.model_dump(exclude_unset=True)
     )
@@ -50,6 +76,11 @@ def atualizar(
 @router.delete("/{produto_id}", status_code=204)
 def apagar(
     produto_id: int,
-    db: Session = Depends(get_db)
+    usuario: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    service.apagar(db, produto_id)
+    service.apagar(
+        db,
+        usuario,
+        produto_id
+    )

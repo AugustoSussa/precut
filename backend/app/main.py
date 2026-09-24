@@ -1,15 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .database import Base, engine
 from .produtos import controller as produtos_controller
 from .produtos.erros import ErroDeProduto, ProdutoNaoEncontrado
 from .usuarios import controller as usuarios_controller
 from .usuarios.erros import CredenciaisInvalidas, ErroDeUsuario
-
-# So' para a aula: cria as tabelas ao subir.
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="API do Meu Projeto", version="0.3.0")
 app.include_router(produtos_controller.router)
 app.include_router(usuarios_controller.router)
