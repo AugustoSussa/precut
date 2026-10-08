@@ -12,12 +12,13 @@ import 'package:frontend/routes.dart';
 import 'package:frontend/screens/cadastro_screen.dart';
 import 'package:frontend/screens/inicio_screen.dart';
 import 'package:frontend/screens/login_screen.dart';
+import 'package:frontend/screens/perfil_screen.dart';
+import 'package:frontend/screens/produtos_screen.dart';
 import 'package:frontend/services/sessao_service.dart';
 
 int pedidos = 0;
 
-/// Simula a API de autenticação sem precisar iniciar o servidor.
-SessaoService criarSessaoDeTeste() {
+SessaoService sessaoDeMentira() {
   final cliente = MockClient((pedido) async {
     pedidos++;
 
@@ -25,7 +26,7 @@ SessaoService criarSessaoDeTeste() {
       if (pedido.bodyFields['password'] == 'segredo123') {
         return http.Response(
           jsonEncode({
-            'access_token': 'token-de-teste',
+            'access_token': 'token-da-ana',
             'token_type': 'bearer',
           }),
           200,
@@ -39,7 +40,7 @@ SessaoService criarSessaoDeTeste() {
     }
 
     if (pedido.url.path == '/usuarios/eu' &&
-        pedido.headers['Authorization'] == 'Bearer token-de-teste') {
+        pedido.headers['Authorization'] == 'Bearer token-da-ana') {
       return http.Response(
         jsonEncode({
           'id': 1,
@@ -61,16 +62,14 @@ SessaoService criarSessaoDeTeste() {
   );
 }
 
-/// Cria o aplicativo com uma sessão de teste já existente.
-Widget criarAppDeTeste(SessaoService sessao) {
+Widget appDeMentira(SessaoService sessao) {
   return ChangeNotifierProvider<SessaoService>.value(
     value: sessao,
     child: const ProdutosApp(),
   );
 }
 
-/// Preenche o formulário e tenta entrar.
-Future<void> preencherFormularioDeLogin(
+Future<void> preencherEEntrar(
   WidgetTester tester,
   String senha,
 ) async {
@@ -78,16 +77,18 @@ Future<void> preencherFormularioDeLogin(
     find.byType(TextField).at(0),
     'ana@exemplo.com',
   );
-
   await tester.enterText(
     find.byType(TextField).at(1),
     senha,
   );
-
   await tester.tap(
     find.widgetWithText(ElevatedButton, 'Entrar'),
   );
+  await tester.pumpAndSettle();
+}
 
+Future<void> abrirOMenu(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.menu));
   await tester.pumpAndSettle();
 }
 
@@ -96,146 +97,250 @@ void main() {
     pedidos = 0;
   });
 
-  group('Tela de login', () {
-    testWidgets(
-      'exibe os campos de e-mail, senha e o botão Entrar',
-      (tester) async {
-        await tester.pumpWidget(
-          criarAppDeTeste(criarSessaoDeTeste()),
-        );
+  testWidgets(
+    'a tela de login tem e-mail, senha e o botão Entrar',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
 
-        expect(find.byType(TextField), findsNWidgets(2));
-        expect(
-          find.widgetWithText(ElevatedButton, 'Entrar'),
-          findsOneWidget,
-        );
-        expect(find.text('Criar uma conta'), findsOneWidget);
-      },
-    );
+      expect(find.byType(TextField), findsNWidgets(2));
+      expect(
+        find.widgetWithText(ElevatedButton, 'Entrar'),
+        findsOneWidget,
+      );
+      expect(find.text('Criar uma conta'), findsOneWidget);
+    },
+  );
 
-    testWidgets(
-      'login bem-sucedido abre a tela inicial',
-      (tester) async {
-        await tester.pumpWidget(
-          criarAppDeTeste(criarSessaoDeTeste()),
-        );
+  testWidgets(
+    'a tela de cadastro tem nome, e-mail e senha',
+    (tester) async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SessaoService>(
+          create: (_) => sessaoDeMentira(),
+          child: const MaterialApp(
+            home: CadastroScreen(),
+          ),
+        ),
+      );
 
-        await preencherFormularioDeLogin(tester, 'segredo123');
+      expect(find.byType(TextField), findsNWidgets(3));
+      expect(
+        find.widgetWithText(ElevatedButton, 'Cadastrar'),
+        findsOneWidget,
+      );
+    },
+  );
 
-        expect(find.byType(InicioScreen), findsOneWidget);
-        expect(find.text('Olá, Ana!'), findsOneWidget);
-        expect(find.byType(LoginScreen), findsNothing);
-      },
-    );
+  testWidgets(
+    'com a senha certa, abre a tela inicial',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
 
-    testWidgets(
-      'senha incorreta mantém o usuário na tela de login',
-      (tester) async {
-        await tester.pumpWidget(
-          criarAppDeTeste(criarSessaoDeTeste()),
-        );
+      await preencherEEntrar(tester, 'segredo123');
 
-        await preencherFormularioDeLogin(tester, 'senha-errada');
+      expect(find.byType(InicioScreen), findsOneWidget);
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+    },
+  );
 
-        expect(
-          find.text('E-mail ou senha incorretos'),
-          findsOneWidget,
-        );
-        expect(find.byType(LoginScreen), findsOneWidget);
-      },
-    );
+  testWidgets(
+    'com a senha errada, continua no login e mostra o erro',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
 
-    testWidgets(
-      'o botão Criar uma conta abre o cadastro',
-      (tester) async {
-        await tester.pumpWidget(
-          criarAppDeTeste(criarSessaoDeTeste()),
-        );
+      await preencherEEntrar(tester, 'senha-errada');
 
-        await tester.tap(find.text('Criar uma conta'));
-        await tester.pumpAndSettle();
+      expect(
+        find.text('E-mail ou senha incorretos'),
+        findsOneWidget,
+      );
+      expect(find.byType(LoginScreen), findsOneWidget);
+    },
+  );
 
-        expect(find.byType(CadastroScreen), findsOneWidget);
-      },
-    );
-  });
+  testWidgets(
+    'Criar uma conta abre a tela de cadastro',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
 
-  group('Sessão do usuário', () {
-    test(
-      'campos vazios são rejeitados sem chamar a API',
-      () async {
-        final sessao = criarSessaoDeTeste();
+      await tester.tap(find.text('Criar uma conta'));
+      await tester.pumpAndSettle();
 
-        await expectLater(
-          sessao.entrar('', ''),
-          throwsA(isA<ErroDeLogin>()),
-        );
+      expect(find.byType(CadastroScreen), findsOneWidget);
+    },
+  );
 
-        expect(pedidos, 0);
-        expect(sessao.logado, isFalse);
-      },
-    );
+  testWidgets(
+    'sem sessão, a rota protegida não exibe a tela inicial',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
 
-    test(
-      'entrar e sair atualizam a sessão e notificam os ouvintes',
-      () async {
-        final sessao = criarSessaoDeTeste();
-        var notificacoes = 0;
+      Navigator.of(
+        tester.element(find.byType(LoginScreen)),
+      ).pushNamed(AppRoutes.inicio);
 
-        sessao.addListener(() {
-          notificacoes++;
-        });
+      await tester.pumpAndSettle();
 
-        await sessao.entrar(
-          'ana@exemplo.com',
-          'segredo123',
-        );
+      expect(find.byType(InicioScreen), findsNothing);
+      expect(find.byType(LoginScreen), findsOneWidget);
+    },
+  );
 
-        expect(sessao.token, 'token-de-teste');
-        expect(sessao.usuario?.nome, 'Ana');
-        expect(sessao.logado, isTrue);
-        expect(notificacoes, 1);
+  testWidgets(
+    'o menu mostra o usuário e permite abrir o perfil',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
+      await preencherEEntrar(tester, 'segredo123');
 
-        sessao.sair();
+      await abrirOMenu(tester);
 
-        expect(sessao.logado, isFalse);
-        expect(sessao.usuario, isNull);
-        expect(notificacoes, 2);
-      },
-    );
+      final menu = find.byType(Drawer);
 
-    testWidgets(
-      'Provider atualiza a interface quando a sessão muda',
-      (tester) async {
-        final sessao = criarSessaoDeTeste();
+      expect(
+        find.descendant(of: menu, matching: find.text('Ana')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: menu,
+          matching: find.text('ana@exemplo.com'),
+        ),
+        findsOneWidget,
+      );
 
-        await tester.pumpWidget(
-          ChangeNotifierProvider<SessaoService>.value(
-            value: sessao,
-            child: MaterialApp(
-              home: Builder(
-                builder: (context) {
-                  final nome =
-                      context.watch<SessaoService>().usuario?.nome;
+      await tester.tap(
+        find.descendant(of: menu, matching: find.text('Perfil')),
+      );
+      await tester.pumpAndSettle();
 
-                  return Text(nome ?? 'Ninguém conectado');
-                },
-              ),
+      expect(find.byType(PerfilScreen), findsOneWidget);
+
+      await abrirOMenu(tester);
+
+      expect(
+        find.descendant(
+          of: find.byType(Drawer),
+          matching: find.text('Ana'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'o menu abre a tela de produtos',
+    (tester) async {
+      await tester.pumpWidget(appDeMentira(sessaoDeMentira()));
+      await preencherEEntrar(tester, 'segredo123');
+
+      await abrirOMenu(tester);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Drawer),
+          matching: find.text('Produtos'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProdutosScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'sair volta ao login e limpa a sessão',
+    (tester) async {
+      final sessao = sessaoDeMentira();
+
+      await tester.pumpWidget(appDeMentira(sessao));
+      await preencherEEntrar(tester, 'segredo123');
+
+      await tester.tap(find.text('Ver produtos'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProdutosScreen), findsOneWidget);
+
+      await abrirOMenu(tester);
+      await tester.tap(find.text('Sair'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(ProdutosScreen), findsNothing);
+      expect(
+        Navigator.of(
+          tester.element(find.byType(LoginScreen)),
+        ).canPop(),
+        isFalse,
+      );
+      expect(sessao.logado, isFalse);
+    },
+  );
+
+  testWidgets(
+    'o Provider atualiza a tela quando a sessão muda',
+    (tester) async {
+      final sessao = sessaoDeMentira();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SessaoService>.value(
+          value: sessao,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) {
+                final nome =
+                    context.watch<SessaoService>().usuario?.nome;
+
+                return Text(nome ?? 'Ninguém conectado');
+              },
             ),
           ),
-        );
+        ),
+      );
 
-        expect(find.text('Ninguém conectado'), findsOneWidget);
+      expect(find.text('Ninguém conectado'), findsOneWidget);
 
-        await sessao.entrar(
-          'ana@exemplo.com',
-          'segredo123',
-        );
+      await sessao.entrar('ana@exemplo.com', 'segredo123');
+      await tester.pump();
 
-        await tester.pump();
+      expect(find.text('Ana'), findsOneWidget);
+    },
+  );
 
-        expect(find.text('Ana'), findsOneWidget);
-      },
-    );
-  });
+  test(
+    'o service recusa campos vazios sem chamar a API',
+    () async {
+      final sessao = sessaoDeMentira();
+
+      await expectLater(
+        sessao.entrar('', ''),
+        throwsA(isA<ErroDeLogin>()),
+      );
+
+      expect(pedidos, 0);
+      expect(sessao.logado, isFalse);
+    },
+  );
+
+  test(
+    'entrar e sair alteram a sessão e notificam os ouvintes',
+    () async {
+      final sessao = sessaoDeMentira();
+      var avisos = 0;
+
+      sessao.addListener(() => avisos++);
+
+      await sessao.entrar('ana@exemplo.com', 'segredo123');
+
+      expect(sessao.token, 'token-da-ana');
+      expect(sessao.usuario?.nome, 'Ana');
+      expect(avisos, 1);
+
+      sessao.sair();
+
+      expect(sessao.logado, isFalse);
+      expect(sessao.usuario, isNull);
+      expect(avisos, 2);
+    },
+  );
 }
