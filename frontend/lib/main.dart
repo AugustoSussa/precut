@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'repositories/usuario_repository.dart';
 import 'routes.dart';
@@ -6,25 +7,23 @@ import 'screens/cadastro_screen.dart';
 import 'screens/inicio_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/sessao_service.dart';
+import 'widgets/rota_protegida.dart';
 
-// Monta as dependências do aplicativo e configura a navegação.
+// Registra a sessão no topo do aplicativo para que
+// todas as telas possam acessá-la através do Provider.
 void main() {
-  final sessao = SessaoService(
-    UsuarioRepository(),
-  );
-
   runApp(
-    BibliotecaApp(sessao: sessao),
+    ChangeNotifierProvider(
+      create: (_) => SessaoService(
+        UsuarioRepository(),
+      ),
+      child: const ProdutosApp(),
+    ),
   );
 }
 
-class BibliotecaApp extends StatelessWidget {
-  const BibliotecaApp({
-    super.key,
-    required this.sessao,
-  });
-
-  final SessaoService sessao;
+class ProdutosApp extends StatelessWidget {
+  const ProdutosApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +36,11 @@ class BibliotecaApp extends StatelessWidget {
       ),
       initialRoute: AppRoutes.login,
       routes: {
-        AppRoutes.login: (context) =>
-            LoginScreen(sessao: sessao),
-
-        AppRoutes.cadastro: (context) =>
-            const CadastroScreen(),
-
-        AppRoutes.inicio: (context) =>
-            InicioScreen(sessao: sessao),
+        AppRoutes.login: (context) => const LoginScreen(),
+        AppRoutes.cadastro: (context) => const CadastroScreen(),
+        AppRoutes.inicio: (context) => const RotaProtegida(
+              tela: InicioScreen(),
+            ),
       },
     );
   }

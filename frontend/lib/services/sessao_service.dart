@@ -1,42 +1,73 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/usuario.dart';
 import '../repositories/usuario_repository.dart';
 
-// Uma recusa do app, com a frase para a tela mostrar: como os erros.py do backend.
+// Erro de autenticação com mensagem para a tela exibir.
 class ErroDeLogin implements Exception {
   ErroDeLogin(this.mensagem);
 
   final String mensagem;
 }
 
-// A camada de negócio do app: as regras do login e quem está logado.
-// Não sabe de tela nem de HTTP: confere, pede ao repositório e guarda o token.
-class SessaoService {
+// Camada de negócio responsável pela autenticação e pela sessão.
+// Não conhece telas nem executa requisições HTTP diretamente.
+class SessaoService extends ChangeNotifier {
   SessaoService(this.repositorio);
 
   final UsuarioRepository repositorio;
+
   String? token;
+  Usuario? usuario;
 
+  // Indica se existe um token na sessão.
+  bool get logado => token != null;
+
+  // Autentica o usuário e carrega seus dados.
   Future<void> entrar(String email, String senha) async {
-    if (email.isEmpty || senha.isEmpty) {
-      throw ErroDeLogin('Preencha o e-mail e a senha');
+    if (email.trim().isEmpty || senha.isEmpty) {
+      throw ErroDeLogin('Preencha o e-mail e a senha.');
     }
+
     String? recebido;
+
     try {
-      recebido = await repositorio.entrar(email, senha);
-    } catch (e) {
-      throw ErroDeLogin('Não consegui falar com a API. O uvicorn está rodando?');
+      recebido = await repositorio.entrar(
+        email.trim(),
+        senha,
+      );
+    } catch (_) {
+      throw ErroDeLogin(
+        'Não consegui falar com a API. Verifique se o servidor está rodando.',
+      );
     }
+
     if (recebido == null) {
-      throw ErroDeLogin('E-mail ou senha incorretos');
+      throw ErroDeLogin('E-mail ou senha incorretos.');
     }
+
+    Usuario? quem;
+
+    try {
+      quem = await repositorio.quemSouEu(recebido);
+    } catch (_) {
+      throw ErroDeLogin(
+        'Não foi possível carregar os dados do usuário.',
+      );
+    }
+
+    // Atualiza a sessão somente após carregar os dados.
     token = recebido;
+    usuario = quem;
+
+    notifyListeners();
   }
 
-  Future<Usuario> usuarioLogado() {
-    return repositorio.quemSouEu(token!);
-  }
-
+  // Encerra a sessão atual.
   void sair() {
     token = null;
+    usuario = null;
+
+    notifyListeners();
   }
 }
