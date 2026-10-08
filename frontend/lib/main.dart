@@ -6,14 +6,14 @@ import 'routes.dart';
 import 'screens/cadastro_screen.dart';
 import 'screens/inicio_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/perfil_screen.dart';
+import 'screens/produto_screen.dart';
 import 'services/sessao_service.dart';
 import 'widgets/rota_protegida.dart';
 
-// Registra a sessão no topo do aplicativo para que
-// todas as telas possam acessá-la através do Provider.
 void main() {
   runApp(
-    ChangeNotifierProvider(
+    ChangeNotifierProvider<SessaoService>(
       create: (_) => SessaoService(
         UsuarioRepository(),
       ),
@@ -28,7 +28,7 @@ class ProdutosApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Produtos',
+      title: 'Gerenciamento de Produtos',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
@@ -38,8 +38,17 @@ class ProdutosApp extends StatelessWidget {
       routes: {
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.cadastro: (context) => const CadastroScreen(),
+
         AppRoutes.inicio: (context) => const RotaProtegida(
               tela: InicioScreen(),
+            ),
+
+        AppRoutes.produtos: (context) => const RotaProtegida(
+              tela: ProdutosScreen(),
+            ),
+
+        AppRoutes.perfil: (context) => const RotaProtegida(
+              tela: PerfilScreen(),
             ),
       },
     );
