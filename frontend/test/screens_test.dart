@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:frontend/main.dart';
 import 'package:frontend/repositories/usuario_repository.dart';
@@ -18,8 +19,12 @@ import 'package:frontend/services/sessao_service.dart';
 
 int pedidos = 0;
 
-// Simula a API FastAPI sem precisar iniciar o backend.
-SessaoService sessaoDeMentira() {
+// Simula a API FastAPI e o armazenamento local do dispositivo.
+SessaoService sessaoDeMentira({
+  Map<String, Object> guardado = const {},
+}) {
+  SharedPreferences.setMockInitialValues(guardado);
+
   final contas = <String, Map<String, String>>{
     'ana@exemplo.com': {
       'nome': 'Ana',
@@ -30,7 +35,7 @@ SessaoService sessaoDeMentira() {
   final cliente = MockClient((pedido) async {
     pedidos++;
 
-    // Cadastro
+    // Cadastro de usuário.
     if (pedido.url.path == '/usuarios/' &&
         pedido.method == 'POST') {
       final dados = jsonDecode(pedido.body);
@@ -73,7 +78,7 @@ SessaoService sessaoDeMentira() {
       );
     }
 
-    // Login OAuth2: username e password.
+    // Login OAuth2.
     if (pedido.url.path == '/usuarios/login' &&
         pedido.method == 'POST') {
       final email = pedido.bodyFields['username'];
@@ -97,7 +102,7 @@ SessaoService sessaoDeMentira() {
       );
     }
 
-    // Usuário autenticado.
+    // Recupera o usuário autenticado.
     if (pedido.url.path == '/usuarios/eu' &&
         pedido.method == 'GET') {
       final email =
@@ -129,7 +134,7 @@ SessaoService sessaoDeMentira() {
   );
 }
 
-// Inicia o aplicativo com a sessão simulada.
+// Inicia o aplicativo com uma sessão simulada.
 Widget appDeMentira(SessaoService sessao) {
   return ChangeNotifierProvider<SessaoService>.value(
     value: sessao,
@@ -137,6 +142,7 @@ Widget appDeMentira(SessaoService sessao) {
   );
 }
 
+// Preenche os campos de login.
 Future<void> preencherEEntrar(
   WidgetTester tester,
   String senha,
@@ -158,11 +164,13 @@ Future<void> preencherEEntrar(
   await tester.pumpAndSettle();
 }
 
+// Abre o menu lateral.
 Future<void> abrirOMenu(WidgetTester tester) async {
   await tester.tap(find.byIcon(Icons.menu));
   await tester.pumpAndSettle();
 }
 
+// Preenche o formulário de cadastro.
 Future<void> preencherECadastrar(
   WidgetTester tester,
   String email,
@@ -193,6 +201,13 @@ Future<void> preencherECadastrar(
   await tester.pumpAndSettle();
 }
 
+// Consulta o token salvo no SharedPreferences.
+Future<String?> tokenGuardado() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('token');
+}
+
+// Confere a mensagem de erro do cadastro.
 Matcher recusadoCom(String frase) {
   return throwsA(
     isA<ErroDeCadastro>().having(
@@ -205,7 +220,7 @@ Matcher recusadoCom(String frase) {
 
 void main() {
   testWidgets(
-    'a tela de login tem e-mail, senha e botão Entrar',
+    'a tela de login possui e-mail, senha e botão Entrar',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -226,7 +241,7 @@ void main() {
   );
 
   testWidgets(
-    'a tela de cadastro tem nome, e-mail e senha',
+    'a tela de cadastro possui nome, e-mail e senha',
     (tester) async {
       final sessao = sessaoDeMentira();
 
@@ -249,7 +264,7 @@ void main() {
   );
 
   testWidgets(
-    'com a senha certa abre a tela inicial',
+    'login correto abre a tela inicial',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -264,7 +279,7 @@ void main() {
   );
 
   testWidgets(
-    'com a senha errada mostra o erro',
+    'login incorreto apresenta mensagem de erro',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -291,15 +306,12 @@ void main() {
       await tester.tap(find.text('Criar uma conta'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.byType(CadastroScreen),
-        findsOneWidget,
-      );
+      expect(find.byType(CadastroScreen), findsOneWidget);
     },
   );
 
   testWidgets(
-    'cadastrar cria a conta e abre a tela inicial',
+    'cadastro correto cria usuário e abre o início',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -318,7 +330,7 @@ void main() {
   );
 
   testWidgets(
-    'e-mail repetido mostra o erro no cadastro',
+    'cadastro com e-mail repetido mostra erro',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -341,7 +353,7 @@ void main() {
   );
 
   testWidgets(
-    'Já tenho conta volta ao login',
+    'Já tenho conta retorna ao login',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -359,7 +371,7 @@ void main() {
   );
 
   testWidgets(
-    'rota protegida impede acesso sem login',
+    'rota protegida impede acesso sem autenticação',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -377,7 +389,7 @@ void main() {
   );
 
   testWidgets(
-    'o menu mostra os dados do usuário',
+    'menu lateral mostra os dados do usuário',
     (tester) async {
       await tester.pumpWidget(
         appDeMentira(sessaoDeMentira()),
@@ -418,15 +430,17 @@ void main() {
   );
 
   testWidgets(
-    'sair volta ao login e apaga a sessão',
+    'logout limpa a sessão, o token e a navegação',
     (tester) async {
       final sessao = sessaoDeMentira();
 
-      await tester.pumpWidget(
-        appDeMentira(sessao),
-      );
-
+      await tester.pumpWidget(appDeMentira(sessao));
       await preencherEEntrar(tester, 'segredo123');
+
+      expect(
+        await tokenGuardado(),
+        'token-de-ana@exemplo.com',
+      );
 
       await abrirOMenu(tester);
 
@@ -445,11 +459,31 @@ void main() {
       expect(sessao.logado, isFalse);
       expect(sessao.token, isNull);
       expect(sessao.usuario, isNull);
+      expect(await tokenGuardado(), isNull);
     },
   );
 
   testWidgets(
-    'o Provider atualiza a tela quando a sessão muda',
+    'sessão restaurada abre diretamente a tela inicial',
+    (tester) async {
+      final sessao = sessaoDeMentira(
+        guardado: {
+          'token': 'token-de-ana@exemplo.com',
+        },
+      );
+
+      await sessao.restaurar();
+
+      await tester.pumpWidget(appDeMentira(sessao));
+
+      expect(find.byType(InicioScreen), findsOneWidget);
+      expect(find.text('Olá, Ana!'), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Provider atualiza a tela quando a sessão muda',
     (tester) async {
       final sessao = sessaoDeMentira();
 
@@ -483,10 +517,9 @@ void main() {
   );
 
   test(
-    'o service recusa campos vazios sem chamar a API',
+    'campos vazios são recusados sem chamar a API',
     () async {
       final sessao = sessaoDeMentira();
-
       pedidos = 0;
 
       await expectLater(
@@ -507,7 +540,7 @@ void main() {
   );
 
   test(
-    'entrar muda a sessão e notifica os ouvintes',
+    'entrar e sair atualizam a sessão e notificam ouvintes',
     () async {
       final sessao = sessaoDeMentira();
       var avisos = 0;
@@ -525,13 +558,18 @@ void main() {
       );
 
       expect(sessao.usuario?.nome, 'Ana');
-      expect(sessao.logado, isTrue);
       expect(avisos, 1);
+
+      await sessao.sair();
+
+      expect(sessao.logado, isFalse);
+      expect(sessao.usuario, isNull);
+      expect(avisos, 2);
     },
   );
 
   test(
-    'cadastrar cria a conta e já faz login',
+    'cadastro cria a conta e autentica automaticamente',
     () async {
       final sessao = sessaoDeMentira();
 
@@ -552,7 +590,7 @@ void main() {
   );
 
   test(
-    'o service trata e-mail repetido e senha inválida',
+    'service trata erros HTTP 409 e 422',
     () async {
       final sessao = sessaoDeMentira();
 
@@ -579,6 +617,92 @@ void main() {
       );
 
       expect(sessao.logado, isFalse);
+      expect(await tokenGuardado(), isNull);
+    },
+  );
+
+  test(
+    'login salva o token no dispositivo',
+    () async {
+      final sessao = sessaoDeMentira();
+
+      await sessao.entrar(
+        'ana@exemplo.com',
+        'segredo123',
+      );
+
+      expect(
+        await tokenGuardado(),
+        'token-de-ana@exemplo.com',
+      );
+    },
+  );
+
+  test(
+    'restaurar recupera a sessão salva',
+    () async {
+      final sessao = sessaoDeMentira(
+        guardado: {
+          'token': 'token-de-ana@exemplo.com',
+        },
+      );
+
+      pedidos = 0;
+
+      await sessao.restaurar();
+
+      expect(sessao.logado, isTrue);
+      expect(sessao.usuario?.nome, 'Ana');
+      expect(pedidos, 1);
+    },
+  );
+
+  test(
+    'restaurar sem token não chama a API',
+    () async {
+      final sessao = sessaoDeMentira();
+      pedidos = 0;
+
+      await sessao.restaurar();
+
+      expect(sessao.logado, isFalse);
+      expect(pedidos, 0);
+    },
+  );
+
+  test(
+    'restaurar remove token expirado',
+    () async {
+      final sessao = sessaoDeMentira(
+        guardado: {
+          'token': 'token-vencido',
+        },
+      );
+
+      await sessao.restaurar();
+
+      expect(sessao.logado, isFalse);
+      expect(await tokenGuardado(), isNull);
+    },
+  );
+
+  test(
+    'logout remove o token salvo',
+    () async {
+      final sessao = sessaoDeMentira(
+        guardado: {
+          'token': 'token-de-ana@exemplo.com',
+        },
+      );
+
+      await sessao.restaurar();
+
+      expect(sessao.logado, isTrue);
+
+      await sessao.sair();
+
+      expect(sessao.logado, isFalse);
+      expect(await tokenGuardado(), isNull);
     },
   );
 }
