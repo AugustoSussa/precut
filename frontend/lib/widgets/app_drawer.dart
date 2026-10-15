@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -27,7 +28,10 @@ class AppDrawer extends StatelessWidget {
               usuario?.email ?? '',
             ),
             currentAccountPicture: const CircleAvatar(
-              child: Icon(Icons.person, size: 36),
+              child: Icon(
+                Icons.person,
+                size: 36,
+              ),
             ),
           ),
 
@@ -72,8 +76,20 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Sair'),
-            onTap: () {
-              context.read<SessaoService>().sair();
+            onTap: () async {
+              final servico = context.read<SessaoService>();
+
+              // Fecha o menu antes de encerrar a sessão.
+              Navigator.pop(context);
+
+              try {
+                await servico.sair();
+              } catch (e) {
+                // Mesmo que o armazenamento falhe,
+                // a sessão em memória já foi encerrada.
+              }
+
+              if (!context.mounted) return;
 
               Navigator.pushNamedAndRemoveUntil(
                 context,

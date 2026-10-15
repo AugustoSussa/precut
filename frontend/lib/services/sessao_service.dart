@@ -1,6 +1,8 @@
+
 import 'package:flutter/foundation.dart';
 
 import '../models/usuario.dart';
+import '../repositories/token_repository.dart';
 import '../repositories/usuario_repository.dart';
 
 class ErroDeLogin implements Exception {
@@ -16,15 +18,20 @@ class ErroDeCadastro implements Exception {
 }
 
 class SessaoService extends ChangeNotifier {
-  SessaoService(this.repositorio);
+  SessaoService(
+    this.repositorio, {
+    TokenRepository? tokens,
+  }) : tokens = tokens ?? TokenRepository();
 
   final UsuarioRepository repositorio;
+  final TokenRepository tokens;
 
   String? token;
   Usuario? usuario;
 
   bool get logado => token != null && usuario != null;
 
+  // Realiza o login e salva o token no dispositivo.
   Future<void> entrar(String email, String senha) async {
     email = email.trim();
 
@@ -41,6 +48,9 @@ class SessaoService extends ChangeNotifier {
 
       final quem = await repositorio.quemSouEu(recebido);
 
+      // Persiste o token antes de confirmar o login.
+      await tokens.salvar(recebido);
+
       token = recebido;
       usuario = quem;
 
@@ -51,11 +61,12 @@ class SessaoService extends ChangeNotifier {
       throw ErroDeLogin(e.mensagem);
     } catch (e) {
       throw ErroDeLogin(
-        'Não consegui falar com a API. Verifique se o servidor está rodando.',
+        'Não foi possível concluir o login. Verifique a conexão com a API.',
       );
     }
   }
 
+  // Cadastra o usuário e realiza o login automaticamente.
   Future<void> cadastrar(
     String nome,
     String email,
@@ -90,15 +101,53 @@ class SessaoService extends ChangeNotifier {
       rethrow;
     } catch (e) {
       throw ErroDeCadastro(
-        'Não consegui falar com a API. Verifique se o servidor está rodando.',
+        'Não foi possível realizar o cadastro. Verifique a conexão com a API.',
       );
     }
   }
 
-  void sair() {
+  // Recupera a sessão salva quando o aplicativo é iniciado.
+  Future<void> restaurar() async {
+    String? guardado;
+
+    try {
+      guardado = await tokens.ler();
+
+      if (guardado == null || guardado.isEmpty) {
+        return;
+      }
+
+      final quem = await repositorio.quemSouEu(guardado);
+
+      token = guardado;
+      usuario = quem;
+
+      notifyListeners();
+    } on RecusaDaApi {
+      // Token expirado ou inválido.
+      token = null;
+      usuario = null;
+
+      try {
+        await tokens.apagar();
+      } catch (_) {
+        // Falha no armazenamento local.
+      }
+
+      notifyListeners();
+    } catch (e) {
+      // Se a API estiver indisponível, o token permanece salvo.
+      // A sessão poderá ser restaurada na próxima inicialização.
+    }
+  }
+
+  // Encerra a sessão e remove o token armazenado.
+  Future<void> sair() async {
     token = null;
     usuario = null;
 
     notifyListeners();
+
+    await tokens.apagar();
   }
 }
