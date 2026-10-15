@@ -3,15 +3,18 @@ import 'package:flutter/foundation.dart';
 import '../models/usuario.dart';
 import '../repositories/usuario_repository.dart';
 
-// Erro de autenticação com mensagem para a tela exibir.
 class ErroDeLogin implements Exception {
   ErroDeLogin(this.mensagem);
 
   final String mensagem;
 }
 
-// Camada de negócio responsável pela autenticação e pela sessão.
-// Não conhece telas nem executa requisições HTTP diretamente.
+class ErroDeCadastro implements Exception {
+  ErroDeCadastro(this.mensagem);
+
+  final String mensagem;
+}
+
 class SessaoService extends ChangeNotifier {
   SessaoService(this.repositorio);
 
@@ -20,50 +23,78 @@ class SessaoService extends ChangeNotifier {
   String? token;
   Usuario? usuario;
 
-  // Indica se existe um token na sessão.
-  bool get logado => token != null;
+  bool get logado => token != null && usuario != null;
 
-  // Autentica o usuário e carrega seus dados.
   Future<void> entrar(String email, String senha) async {
-    if (email.trim().isEmpty || senha.isEmpty) {
-      throw ErroDeLogin('Preencha o e-mail e a senha.');
+    email = email.trim();
+
+    if (email.isEmpty || senha.trim().isEmpty) {
+      throw ErroDeLogin('Preencha o e-mail e a senha');
     }
 
-    String? recebido;
-
     try {
-      recebido = await repositorio.entrar(
-        email.trim(),
-        senha,
-      );
-    } catch (_) {
+      final recebido = await repositorio.entrar(email, senha);
+
+      if (recebido == null) {
+        throw ErroDeLogin('E-mail ou senha incorretos');
+      }
+
+      final quem = await repositorio.quemSouEu(recebido);
+
+      token = recebido;
+      usuario = quem;
+
+      notifyListeners();
+    } on ErroDeLogin {
+      rethrow;
+    } on RecusaDaApi catch (e) {
+      throw ErroDeLogin(e.mensagem);
+    } catch (e) {
       throw ErroDeLogin(
         'Não consegui falar com a API. Verifique se o servidor está rodando.',
       );
     }
+  }
 
-    if (recebido == null) {
-      throw ErroDeLogin('E-mail ou senha incorretos.');
-    }
+  Future<void> cadastrar(
+    String nome,
+    String email,
+    String senha,
+  ) async {
+    nome = nome.trim();
+    email = email.trim();
 
-    Usuario? quem;
-
-    try {
-      quem = await repositorio.quemSouEu(recebido);
-    } catch (_) {
-      throw ErroDeLogin(
-        'Não foi possível carregar os dados do usuário.',
+    if (nome.isEmpty || email.isEmpty || senha.trim().isEmpty) {
+      throw ErroDeCadastro(
+        'Preencha o nome, o e-mail e a senha',
       );
     }
 
-    // Atualiza a sessão somente após carregar os dados.
-    token = recebido;
-    usuario = quem;
+    try {
+      await repositorio.cadastrar(nome, email, senha);
 
-    notifyListeners();
+      await entrar(email, senha);
+    } on RecusaDaApi catch (e) {
+      if (e.status == 409) {
+        throw ErroDeCadastro(
+          'Já existe uma conta com este e-mail',
+        );
+      }
+
+      throw ErroDeCadastro(e.mensagem);
+    } on ErroDeLogin {
+      throw ErroDeCadastro(
+        'Conta criada, mas não consegui entrar. Tente pelo login.',
+      );
+    } on ErroDeCadastro {
+      rethrow;
+    } catch (e) {
+      throw ErroDeCadastro(
+        'Não consegui falar com a API. Verifique se o servidor está rodando.',
+      );
+    }
   }
 
-  // Encerra a sessão atual.
   void sair() {
     token = null;
     usuario = null;
