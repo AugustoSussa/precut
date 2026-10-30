@@ -5,7 +5,6 @@ Operações pesadas rodam em executor para não travar o event loop.
 import asyncio
 import os
 
-import ollama
 import whisper
 from moviepy import VideoFileClip
 from sqlalchemy.orm import Session
@@ -14,13 +13,12 @@ from ..projetos import repository as proj_repo
 from ..projetos.erros import AcessoNegado, ProjetoNaoEncontrado, VideoNaoEnviado
 from ..usuarios.models import Usuario
 from .models import Mensagem
+from . import gemini_service
 
 # Carrega o modelo Whisper uma vez ao importar o módulo
 print("Carregando modelo Whisper...")
 _WHISPER = whisper.load_model("base")
 print("Whisper pronto!")
-
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
 
 PROMPT_ANALISE = """Você é um especialista em marketing digital e criação de conteúdo.
 Analise a transcrição abaixo e gere os seguintes elementos:
@@ -53,9 +51,8 @@ def _transcrever(video_path: str) -> str:
     return " ".join(seg["text"].strip() for seg in resultado["segments"])
 
 
-def _chamar_ollama(mensagens: list[dict]) -> str:
-    resposta = ollama.chat(model=OLLAMA_MODEL, messages=mensagens)
-    return resposta["message"]["content"]
+def _chamar_ia(mensagens: list[dict]) -> str:
+    return gemini_service._chamar_gemini(mensagens)
 
 
 # ── serviços assíncronos ──────────────────────────────────────────────────
@@ -81,7 +78,7 @@ async def processar(db: Session, usuario: Usuario, projeto_id: int) -> dict:
         # 2. Análise com Llama
         prompt = PROMPT_ANALISE.format(transcricao=transcricao)
         mensagens_llm = [{"role": "user", "content": prompt}]
-        analise = await loop.run_in_executor(None, _chamar_ollama, mensagens_llm)
+        analise = await loop.run_in_executor(None, _chamar_ia, mensagens_llm)
 
         # 3. Salva no banco
         proj_repo.atualizar(db, projeto, {
@@ -122,7 +119,7 @@ async def chat(db: Session, usuario: Usuario, projeto_id: int, mensagem: str) ->
     mensagens_llm.append({"role": "user", "content": mensagem})
 
     loop = asyncio.get_event_loop()
-    resposta = await loop.run_in_executor(None, _chamar_ollama, mensagens_llm)
+    resposta = await loop.run_in_executor(None, _chamar_ia, mensagens_llm)
 
     # Persiste no banco
     db.add(Mensagem(projeto_id=projeto_id, papel="user", conteudo=mensagem))
