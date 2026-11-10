@@ -7,7 +7,7 @@ from pathlib import Path
 
 print("Carregando modelo Whisper...")
 import whisper
-_MODEL = whisper.load_model("base")
+_MODEL = whisper.load_model("tiny")
 print("Whisper pronto!")
 
 

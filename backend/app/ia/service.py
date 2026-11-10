@@ -13,7 +13,7 @@ from ..projetos import repository as proj_repo
 from ..projetos.erros import AcessoNegado, ProjetoNaoEncontrado, VideoNaoEnviado
 from ..usuarios.models import Usuario
 from .models import Mensagem
-from . import gemini_service
+from . import openai_service
 
 # Carrega o modelo Whisper uma vez ao importar o módulo
 print("Carregando modelo Whisper...")
@@ -52,7 +52,7 @@ def _transcrever(video_path: str) -> str:
 
 
 def _chamar_ia(mensagens: list[dict]) -> str:
-    return gemini_service._chamar_gemini(mensagens)
+    return openai_service._chamar_gemini(mensagens)
 
 
 # ── serviços assíncronos ──────────────────────────────────────────────────

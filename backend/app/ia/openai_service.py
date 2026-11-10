@@ -1,5 +1,5 @@
 """
-Integração com Google Gemini (substitui o Ollama).
+Integração com OpenAI (substitui o Gemini).
 - analisar(transcricao) → dict com headline, big_idea, hook, descricao_yt, sugestao_shorts
 - chat(historico, mensagem) → str
 """
@@ -8,9 +8,9 @@ import os
 import urllib.request
 import urllib.error
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 PROMPT_ANALISE = """Você é um especialista em marketing de conteúdo digital e criação de vídeos para redes sociais.
 
@@ -30,49 +30,38 @@ TRANSCRIÇÃO:
 """
 
 
-def _chamar_gemini(mensagens: list[dict]) -> str:
-    """Chama a API do Gemini com o histórico de mensagens."""
-    # Converte formato OpenAI/Ollama para formato Gemini
-    contents = []
-    for msg in mensagens:
-        role = "user" if msg["role"] == "user" else "model"
-        contents.append({
-            "role": role,
-            "parts": [{"text": msg["content"]}],
-        })
-
+def _chamar_openai(mensagens: list[dict]) -> str:
     payload = json.dumps({
-        "contents": contents,
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 8192,
-        },
+        "model": OPENAI_MODEL,
+        "messages": mensagens,
+        "temperature": 0.7,
+        "max_tokens": 4096,
     }).encode("utf-8")
 
-    url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
     req = urllib.request.Request(
-        url,
+        OPENAI_URL,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+        },
         method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return data["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
         erro = e.read().decode("utf-8")
-        raise RuntimeError(f"Gemini API erro {e.code}: {erro}")
+        raise RuntimeError(f"OpenAI API erro {e.code}: {erro}")
 
 
 def analisar(transcricao: str) -> dict:
-    """Analisa a transcrição e retorna dict estruturado."""
     mensagens = [{"role": "user", "content": PROMPT_ANALISE.format(transcricao=transcricao)}]
-    texto = _chamar_gemini(mensagens)
+    texto = _chamar_openai(mensagens)
 
     try:
-        # Remove possível markdown que o modelo insira mesmo sendo instruído a não
         texto_limpo = texto.strip()
         if texto_limpo.startswith("```"):
             texto_limpo = texto_limpo.split("\n", 1)[1]
@@ -91,8 +80,7 @@ def analisar(transcricao: str) -> dict:
 
 
 def chat(historico: list[dict], mensagem: str) -> str:
-    """Continua uma conversa com o histórico."""
     historico.append({"role": "user", "content": mensagem})
-    resposta = _chamar_gemini(historico)
+    resposta = _chamar_openai(historico)
     historico.append({"role": "assistant", "content": resposta})
     return resposta

@@ -1,6 +1,6 @@
 """
 Endpoints de IA:
-  POST /ia/processar/{projeto_id}  → transcreve + analisa com Llama
+  POST /ia/processar/{projeto_id}  → transcreve + analisa com OpenAI
   POST /ia/chat/{projeto_id}       → chat com contexto do vídeo
 """
 import asyncio
@@ -16,7 +16,6 @@ from ..projetos.erros import ProjetoNaoEncontrado, SemPermissao, VideoNaoProcess
 from ..seguranca import get_current_user
 from ..usuarios.models import Usuario
 
-# Histórico de chat em memória { projeto_id: [{"role": ..., "content": ...}] }
 _historicos: dict[int, list[dict]] = {}
 
 router = APIRouter(prefix="/ia", tags=["IA"], dependencies=[Depends(get_current_user)], redirect_slashes=False)
@@ -44,7 +43,6 @@ async def processar(
     from pathlib import Path
     video_path = Path("uploads") / Path(projeto.video_url).name
 
-    # Atualiza status
     proj_repo.atualizar(db, projeto, {"status": "processando"})
 
     try:
@@ -54,11 +52,10 @@ async def processar(
         from .whisper_service import transcrever
         transcricao = await loop.run_in_executor(None, transcrever, str(video_path))
 
-        # 2. Análise (Llama 3)
-        from .ollama_service import analisar, chat as ollama_chat
+        # 2. Análise (OpenAI)
+        from .openai_service import analisar, chat as ollama_chat
         analise = await loop.run_in_executor(None, analisar, transcricao)
 
-        # Salva tudo no banco
         sugestao_shorts = analise.get("sugestao_shorts", [])
         if isinstance(sugestao_shorts, list):
             sugestao_shorts = json.dumps(sugestao_shorts, ensure_ascii=False)
@@ -73,7 +70,6 @@ async def processar(
             "status": "pronto",
         })
 
-        # Inicializa histórico de chat com contexto do vídeo
         _historicos[projeto_id] = [
             {
                 "role": "system",
@@ -117,7 +113,6 @@ async def chat(
     if projeto.status != "pronto":
         raise VideoNaoProcessado()
 
-    # Se não tem histórico em memória, reconstrói com a transcrição salva
     if projeto_id not in _historicos:
         _historicos[projeto_id] = [
             {
@@ -129,7 +124,7 @@ async def chat(
             }
         ]
 
-    from .ollama_service import chat as ollama_chat
+    from .openai_service import chat as ollama_chat
     loop = asyncio.get_event_loop()
     resposta = await loop.run_in_executor(
         None, ollama_chat, _historicos[projeto_id], req.mensagem
