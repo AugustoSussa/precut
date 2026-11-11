@@ -1,4 +1,4 @@
-# Imagem de producao do backend FastAPI e transcricao local via Whisper.
+# Imagem de producao FastAPI; transcricao pela API OpenAI, sem PyTorch/Whisper local.
 FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
