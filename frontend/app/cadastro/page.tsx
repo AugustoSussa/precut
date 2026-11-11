@@ -78,7 +78,7 @@ export default function CadastroPage() {
             ))}
             <label className="flex items-start gap-2 text-xs text-[#A4A0BB] leading-relaxed">
               <input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} className="mt-1 accent-[#7C3AED]" />
-              <span>Li o aviso de privacidade e concordo com o processamento e armazenamento local dos vídeos, áudios, transcrições e resultados de IA que enviar. A análise textual poderá ser enviada à API OpenAI. Posso solicitar ao operador a remoção dos meus arquivos e dados. <a className="text-[#C4AEFF] underline" href="/privacidade" target="_blank" rel="noreferrer">Ler aviso completo</a>.</span>
+              <span>Li o aviso de privacidade e concordo com o armazenamento dos meus dados e arquivos no ambiente de nuvem do protótipo. O áudio será enviado à API OpenAI para transcrição e o texto poderá ser enviado para análise por IA. Posso solicitar ao operador a remoção dos meus arquivos e dados. <a className="text-[#C4AEFF] underline" href="/privacidade" target="_blank" rel="noreferrer">Ler aviso completo</a>.</span>
             </label>
             <button
               type="submit"
