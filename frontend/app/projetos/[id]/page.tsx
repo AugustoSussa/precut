@@ -180,6 +180,25 @@ export default function ProjetoPage() {
     finally { setCortando(false) }
   }
 
+  async function baixarCorte() {
+    if (!urlCorte) return
+    try {
+      const resposta = await fetch(urlCorte, { cache: 'no-store' })
+      if (!resposta.ok) throw new Error('Corte indisponível no servidor. Tente exportar novamente.')
+      const arquivo = await resposta.blob()
+      const url = URL.createObjectURL(arquivo)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `precut_corte_${projetoId}.mp4`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    } catch (err: any) {
+      alert(err.message || 'Erro ao baixar corte')
+    }
+  }
+
   async function handleProcessar() {
     setProcessando(true)
     try {
@@ -462,10 +481,10 @@ export default function ProjetoPage() {
                   Exportar corte
                 </button>
                 {urlCorte && (
-                  <a href={urlCorte} download className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors">
+                  <button type="button" onClick={baixarCorte} className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors">
                     <Download className="w-3 h-3" />
                     Baixar
-                  </a>
+                  </button>
                 )}
                 <div className="w-px h-4 bg-[#2A2A38]" />
                 <span className="text-xs text-[#3A3A50]">Zoom</span>
