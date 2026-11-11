@@ -4,7 +4,7 @@ Esta é uma **cópia específica para deploy**. A V6 local continua independente
 
 ## O que está incluído
 
-- `backend/Dockerfile`: Python 3.11, dependências do backend e FFmpeg; inicia Uvicorn com a porta do Render.
+- `backend/Dockerfile`: Python 3.11, dependências leves do backend e FFmpeg; inicia Uvicorn com a porta do Render.
 - `frontend/Dockerfile`: Node 20, instala dependências, compila Next.js e inicia o servidor web.
 - `.dockerignore` em cada serviço: evita incluir arquivos locais, uploads e credenciais na imagem.
 - Banco: aceita `sqlite:///...` local e `postgresql://...`/`postgresql+psycopg://...` no Render, via SQLAlchemy e psycopg 3.
@@ -35,7 +35,7 @@ No Render, crie **New > Web Service** a partir do repositório GitHub:
 - **Root Directory:** `backend`
 - **Dockerfile:** `Dockerfile` (dentro de backend)
 - **Health Check Path:** `/health`
-- **Instance:** para transcrição local e edição, use um plano com memória suficiente; o serviço Free pode não suportar Whisper e renderização.
+- **Instance:** a transcrição passou a usar a API OpenAI, reduzindo bastante o uso de RAM. A exportacao de video/FFmpeg ainda pode exigir mais CPU/memoria.
 
 Em **Environment**, crie as variáveis (NÃO COLE SEUS SEGREDOS NO README):
 
@@ -46,7 +46,7 @@ Em **Environment**, crie as variáveis (NÃO COLE SEUS SEGREDOS NO README):
 | `OPENAI_API_KEY` | Chave privada da API da OpenAI |
 | `OPENAI_MODEL` | `gpt-4o-mini` (ou modelo habilitado na sua chave) |
 | `OPENAI_SEARCH_MODEL` | `gpt-4o` |
-| `WHISPER_MODEL` | `tiny` |
+| `OPENAI_TRANSCRIPTION_MODEL` | `whisper-1` (temporario, para timestamps; descontinuacao em 26/02/2027) |
 | `MAX_UPLOAD_MB` | `150` (ajustar conforme plano, espaço e limites) |
 | `PRECUT_UPLOAD_DIR` | `/var/data/uploads` **se houver disco montado em `/var/data`**; caso contrário, `uploads` (efêmero) |
 | `FRONTEND_ORIGINS` | `https://SEU-FRONTEND.onrender.com` (configurar após criar o frontend) |
@@ -55,7 +55,7 @@ Em **Environment**, crie as variáveis (NÃO COLE SEUS SEGREDOS NO README):
 
 Faça deploy. Copie a URL pública, por exemplo `https://precut-api.onrender.com`. Teste `https://precut-api.onrender.com/health` (esperado `{"status":"ok",...}`) e `/docs`.
 
-Se ocorrer Out of Memory durante a transcrição, o Render precisa de mais memória, ou o módulo Whisper deverá ser migrado para outro serviço. Reduzir `WHISPER_MODEL` para `tiny` ajuda, mas **não garante** execução no plano Free.
+A V6.1 agora extrai o audio com FFmpeg e usa `whisper-1` pela API OpenAI, sem carregar PyTorch no Render. Divide audios longos em trechos de ate 8 minutos, retorna timestamps e reconstitui os deslocamentos para a timeline. **Este modelo esta descontinuado e sera desligado em 26/02/2027**. Antes disso, planeje uma migracao para `gpt-transcribe` com alinhamento temporal ou outro fluxo compativel. Nao foram validadas chamadas reais nem conclusao de processamento na infraestrutura Render.
 
 ## 3 — Frontend Next.js
 
@@ -77,7 +77,7 @@ A aplicação usa HTTPS do Render, e o navegador chama a API diretamente. **Nunc
 1. Abra o frontend numa janela anônima.
 2. Crie uma conta de demonstração e faça login.
 3. Crie um projeto; feche e reabra o navegador, confirme que o projeto continua listado.
-4. Faça upload de **um MP3 pequeno** e teste transcrição/IA. Depois um **MP4 curto** e teste corte/exportação.
+4. Faça upload de **um MP3 pequeno** e teste transcrição via API/IA. Depois um **MP4 curto** e teste corte/exportação.
 5. Teste o Research. Um resultado vazio da busca não significa falha do banco; já um `401` ou `500` deve ser investigado nos logs da API.
 6. Acesse `/docs` e `/health` da API externa.
 7. Adicione os **endereços reais** ao README/monografia. Nunca coloque `DATABASE_URL`, `SECRET_KEY` nem `OPENAI_API_KEY` lá.
@@ -107,3 +107,15 @@ npm run dev
 ```
 
 Não defina `NEXT_PUBLIC_API_URL` localmente, a menos que queira testar a API publicada. Sem ela, o frontend usa `/api` com proxy local.
+
+## Transcricao pela API — versao online
+
+Esta branch usa **OpenAI `whisper-1` via API**, com timestamps de segmentos (`verbose_json`) necessarios para SRT/cortes. A V6 local continua com Whisper offline. O `openai-whisper` e o `ollama` foram removidos das dependencias de deploy, reduzindo memoria e tempo de build. O processo ainda depende de FFmpeg/ffprobe e de arquivos temporarios locais.
+
+- Em **Environment** do backend, remova `WHISPER_MODEL=tiny` (nao utilizado) e adicione `OPENAI_TRANSCRIPTION_MODEL=whisper-1`. A `OPENAI_API_KEY` continua a mesma para transcricao e analise.
+- **Custo aproximado**: US$0,006 por minuto transcrito, alem de tokens de texto para analise/chat e uso de web search. Confirmar precos atuais no painel da API.
+- **Limite de gastos**: configurar alertas e limites do projeto OpenAI, validar custos antes de conceder acesso publico.
+- **Descontinuação**: `whisper-1` sai da API em 26 de fevereiro de 2027. Este e um caminho temporario para demonstracao do TCC, nao uma arquitetura definitiva.
+- **Limites do Render Free**: armazenamento efemero, tempo de requisicao, CPU/RAM durante exportacao de clipes; o sistema pode continuar falhando nesses cenarios mesmo sem Whisper local.
+- **Seguranca**: nao mostrar nem salvar a chave de API no frontend. A aplicacao envia audio ao servico OpenAI (atualizar aviso de privacidade antes de uso com dados reais).
+
