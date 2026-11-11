@@ -1,6 +1,8 @@
 import asyncio
 import os
 import secrets
+import logging
+import math
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi.responses import FileResponse
@@ -18,6 +20,7 @@ from ..projetos.erros import ProjetoNaoEncontrado, SemPermissao
 from ..seguranca import get_current_user
 from ..usuarios.models import Usuario
 
+logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path(os.getenv("PRECUT_UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -143,46 +146,55 @@ async def trim_video(
 
     if Path(projeto.video_url).suffix.lower() == ".mp3":
         raise HTTPException(400, "Cortes MP4 exigem um projeto com vídeo; o MP3 é somente para transcrição.")
+    if not all(math.isfinite(v) for v in (req.start, req.end)):
+        raise HTTPException(400, "Intervalo do corte invalido")
     if not (0 <= req.start < req.end) or (projeto.duracao and req.end > projeto.duracao + 0.1):
-        raise HTTPException(400, "Intervalo do corte inválido")
+        raise HTTPException(400, "Intervalo do corte invalido")
+
     video_path = UPLOAD_DIR / Path(projeto.video_url).name
+    if not video_path.is_file():
+        raise HTTPException(
+            409,
+            "Arquivo de video nao esta mais no servidor. Reenvie o MP4 para exportar.",
+        )
     output_path = UPLOAD_DIR / f"projeto_{req.projeto_id}_corte_{secrets.token_hex(8)}.mp4"
 
     def do_trim():
-        # Tenta ffmpeg primeiro (mais rápido)
+        # FFmpeg com uma thread, seek antes do input, transcodificacao ultrafast.
+        # Evita MoviePy, multiplos processos e buffers excessivos no Render Free.
+        duracao = req.end - req.start
+        cmd = [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-y", "-threads", "1", "-filter_threads", "1",
+            "-ss", f"{req.start:.3f}",
+            "-i", str(video_path),
+            "-t", f"{duracao:.3f}",
+            "-map", "0:v:0", "-map", "0:a:0?",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
+            "-threads:v", "1",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
         try:
-            result = subprocess.run(
-                [
-                    "ffmpeg", "-y",
-                    "-i", str(video_path),
-                    "-ss", str(req.start),
-                    "-to", str(req.end),
-                    "-c:v", "libx264", "-c:a", "aac",
-                    str(output_path),
-                ],
-                capture_output=True, timeout=300,
-            )
-            if result.returncode == 0:
-                return
-        except FileNotFoundError:
-            pass  # ffmpeg não instalado, tenta moviepy
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("Exportacao excedeu 180 segundos") from exc
+        if result.returncode != 0:
+            logger.error("FFmpeg trim failed, code=%s stderr=%s", result.returncode, result.stderr[-2000:])
+            raise RuntimeError("FFmpeg falhou ao exportar o corte; consulte os logs do backend")
+        if not output_path.is_file() or output_path.stat().st_size == 0:
+            raise RuntimeError("FFmpeg nao gerou um arquivo MP4 valido")
 
-        # Fallback: moviepy
-        from moviepy import VideoFileClip
-        clip = VideoFileClip(str(video_path))
-        if req.end > clip.duration:
-            raise ValueError(f"Tempo final ({req.end}s) excede duração ({clip.duration:.1f}s)")
-        subclip = clip.subclipped(req.start, req.end)
-        subclip.write_videofile(str(output_path), codec="libx264", audio_codec="aac", logger=None)
-        clip.close()
-
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         await loop.run_in_executor(None, do_trim)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(500, f"Erro ao cortar vídeo: {str(e)}")
+    except Exception as exc:
+        output_path.unlink(missing_ok=True)
+        logger.exception("Falha ao exportar corte do projeto %s", req.projeto_id)
+        if isinstance(exc, subprocess.TimeoutExpired):
+            raise HTTPException(504, "Exportacao excedeu o tempo limite") from exc
+        raise HTTPException(500, str(exc)) from exc
 
     return {"trimmed_url": f"/uploads/{output_path.name}"}
 
