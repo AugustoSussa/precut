@@ -65,3 +65,37 @@ Abra **Análise IA** para importar SRT, baixar SRT ou exportar TXT. O botão de 
 ## Publicação na nuvem — V6.1
 
 Consulte **[DEPLOY_RENDER_V6_1.md](DEPLOY_RENDER_V6_1.md)** para o roteiro de publicação no Render. O frontend desta versão utiliza Next.js e o backend FastAPI, portanto não use os comandos Flutter/Poetry do tutorial de Web 3.
+
+
+## Testes automatizados — Precut (Next.js + FastAPI)
+
+O projeto **não usa Flutter nem Poetry**. Os testes são independentes do Render e não exigem API OpenAI, navegador gráfico ou banco de produção.
+
+### Backend (Python 3.11+)
+
+No diretório `backend/`, instale as dependências de desenvolvimento e execute:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q tests
+```
+
+O `conftest.py` cria um banco SQLite temporário e isolado para cada teste; os dados são limpos após cada caso. Os cenários HTTP com FastAPI `TestClient` cobrem cadastro, aceite de privacidade, autenticação, criação, consulta, exclusão e isolamento entre proprietários de projetos. Há também testes unitários de SRT, cortes e referências.
+
+### Frontend (Next.js 15 e React 19)
+
+No diretório `frontend/`, instale as dependências do aplicativo, depois as ferramentas temporárias de desenvolvimento e execute:
+
+```bash
+npm ci
+npm install --no-save --package-lock=false vitest@3.2.4 jsdom@26.1.0 @testing-library/react@16.3.0
+npx vitest run
+npm run build
+```
+
+Os testes de componentes cobrem validações no cadastro, erros de login e estados da lista de projetos (com conteúdo, vazia, erro e ausência de sessão). A API é simulada para os testes de interface. As ferramentas de teste são instaladas sem modificar `package.json` ou `package-lock.json`, preservando a instalação e o build da versão atualmente hospedada.
+
+### Integração contínua e implantação
+
+O workflow `.github/workflows/testes.yml` valida as suítes Python e React, além do build Next.js, quando a branch `deploy/v6.1` é atualizada ou em solicitações de integração. **Os testes não são executados dentro do serviço Render** e não são necessários para atender solicitações de usuários. O Render continua implantando o código da branch configurada no painel após o push; conferir o resultado dos checks e do deploy antes de considerar a versão validada.
+
